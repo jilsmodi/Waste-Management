@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { MapPin, Upload, CheckCircle, Loader, AlertTriangle, Camera, Trash2, Map as MapIcon, Gift } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createUser, getUserByEmail, createReport, getReportsForArea } from '@/utils/db/actions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -164,7 +164,7 @@ function MapboxLocationInput({
 
 export default function ReportWastePage() {
   const router = useRouter();
-  const groqApiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
+  const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -217,7 +217,7 @@ export default function ReportWastePage() {
 
     setVerificationStatus('verifying');
     
-    if (!groqApiKey) {
+    if (!geminiApiKey) {
       setTimeout(() => {
         const mockResult: VerificationResult = {
           wasteType: "Mixed Plastic & Paper Waste",
@@ -246,8 +246,11 @@ export default function ReportWastePage() {
     }
 
     try {
-      const groq = new Groq({ apiKey: groqApiKey, dangerouslyAllowBrowser: true });
       const base64Data = await readFileAsBase64(file);
+      const base64Content = base64Data.split(',')[1];
+      
+      const genAI = new GoogleGenerativeAI(geminiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const prompt = `You are an expert in waste management, recycling, and environmental health assessment. Analyze this waste image comprehensively and provide:
 
@@ -276,24 +279,22 @@ Respond ONLY in this exact JSON format (no markdown, no explanation):
   "recommendation": "Route to Recycling Facility B. Separate organic waste for composting."
 }`;
 
-      const response = await groq.chat.completions.create({
-        model: "llama-3.2-11b-vision-preview",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: base64Data } }
-            ]
-          }
-        ],
-        temperature: 0.1
-      });
+      const imagePart = {
+        inlineData: {
+          data: base64Content,
+          mimeType: file.type
+        }
+      };
 
-      let responseText = response.choices[0]?.message?.content || "";
+      const result = await model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      let responseText = response.text() || "";
+
       // Strip markdown code blocks if the model ignored our instruction
       if (responseText.includes("```json")) {
         responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      } else if (responseText.includes("```")) {
+        responseText = responseText.replace(/```/g, '').trim();
       }
 
       const parsedResult: VerificationResult = JSON.parse(responseText);
