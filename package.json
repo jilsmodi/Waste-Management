@@ -79,7 +79,11 @@
     "typescript": "^5"
   },
   "resolutions": {
-    "@openzeppelin/contracts": "^5.0.1"
+    "@openzeppelin/contracts": "^5.0.1",
+    "@zksync/contracts": "https://github.com/matter-labs/era-contracts.git#446d391d34bdb48255d5f8fef8a8248925fc98b9"
+  },
+  "overrides": {
+    "@zksync/contracts": "https://github.com/matter-labs/era-contracts.git#446d391d34bdb48255d5f8fef8a8248925fc98b9"
   },
   "type": "module"
 }
